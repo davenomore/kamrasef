@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Process missing items and add to shopping list
                 for (const item of missingItems) {
-                    message += `- ${item.name} (${item.quantity} ${item.unit})\n`;
+                    message += `- ${item.name} (${item.quantity} ${item.unit})\\n`;
 
                     // Get category
                     let category = 'Egyéb';
@@ -645,16 +645,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
-                    // Add to shopping list with original quantity
+                    // Intelligens vásárlási mennyiség javaslat
+                    const suggested = suggestShoppingQuantity(item.name, item.quantity, item.unit);
+
+                    // Add to shopping list with suggested quantity
                     addToShoppingList({
                         name: item.name,
-                        quantity: item.quantity,
-                        unit: item.unit,
+                        quantity: suggested.quantity,
+                        unit: suggested.unit,
                         category: category
                     });
                 }
 
-                message += `\nEzeket hozzáadtam a bevásárlólistához.`;
+                message += `\\nEzeket hozzáadtam a bevásárlólistához (javasolt vásárlási mennyiséggel).`;
                 alert(message);
             } else {
                 alert(`Minden hozzávaló megvan a(z) ${recipe.name} recepthez! Jó főzést! 👨‍🍳`);
@@ -966,6 +969,95 @@ document.addEventListener('DOMContentLoaded', () => {
     function capitalizeFirstLetter(string) {
         if (!string) return '';
         return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+
+    // Intelligens vásárlási mennyiség javaslat (helyettesíti az AI backend-et)
+    function suggestShoppingQuantity(ingredientName, recipeQuantity, recipeUnit) {
+        const name = ingredientName.toLowerCase();
+
+        // Alapértelmezett tipikus vásárlási mennyiségek
+        const typicalQuantities = {
+            // Száraz alapanyagok (általában kg-ban kaphatók)
+            'cukor': { quantity: 1, unit: 'kg' },
+            'liszt': { quantity: 1, unit: 'kg' },
+            'rizs': { quantity: 1, unit: 'kg' },
+            'só': { quantity: 1, unit: 'kg' },
+            'búzadara': { quantity: 500, unit: 'g' },
+            'zabpehely': { quantity: 500, unit: 'g' },
+
+            // Tejtermékek (literben/gramban)
+            'tej': { quantity: 1, unit: 'l' },
+            'tejföl': { quantity: 200, unit: 'g' },
+            'joghurt': { quantity: 150, unit: 'g' },
+            'vaj': { quantity: 250, unit: 'g' },
+            'margarin': { quantity: 250, unit: 'g' },
+            'sajt': { quantity: 200, unit: 'g' },
+
+            // Tojás - 6 vagy 10 db a mennyiségtől függően
+            'tojás': null, // Külön kezelés lentebb
+
+            // Olajok
+            'olaj': { quantity: 1, unit: 'l' },
+            'olivaolaj': { quantity: 500, unit: 'ml' },
+
+            // Fűszerek (csomag)
+            'őrölt': { quantity: 1, unit: 'csomag' },
+            'fahéj': { quantity: 1, unit: 'csomag' },
+            'bors': { quantity: 1, unit: 'csomag' },
+            'paprika': { quantity: 1, unit: 'csomag' },
+            'köménymag': { quantity: 1, unit: 'csomag' },
+            'vanília': { quantity: 1, unit: 'csomag' },
+            'vaníliacukor': { quantity: 1, unit: 'csomag' },
+            'sütőpor': { quantity: 1, unit: 'csomag' },
+            'szódabikarbóna': { quantity: 1, unit: 'csomag' },
+
+            // Egyéb
+            'kakaó': { quantity: 100, unit: 'g' },
+            'csoki': { quantity: 100, unit: 'g' },
+            'csokoládé': { quantity: 100, unit: 'g' },
+            'mazsola': { quantity: 200, unit: 'g' },
+            'dió': { quantity: 200, unit: 'g' },
+            'mandula': { quantity: 200, unit: 'g' }
+        };
+
+        // Tojás speciális kezelés
+        if (name.includes('tojás')) {
+            const qty = parseFloat(recipeQuantity) || 1;
+            if (qty <= 6) {
+                return { quantity: 6, unit: 'db' };
+            } else {
+                return { quantity: 10, unit: 'db' };
+            }
+        }
+
+        // Keresés kulcsszavak alapján
+        for (const [keyword, suggestion] of Object.entries(typicalQuantities)) {
+            if (suggestion && name.includes(keyword)) {
+                return suggestion;
+            }
+        }
+
+        // Ha nem találunk egyezést, próbáljunk kategória alapján következtetni
+        if (recipeUnit === 'g' || recipeUnit === 'dkg' || recipeUnit === 'kg') {
+            // Száraz alapanyag - javasoljunk 500g vagy 1kg-ot
+            if (recipeQuantity < 500) {
+                return { quantity: 500, unit: 'g' };
+            } else {
+                return { quantity: 1, unit: 'kg' };
+            }
+        }
+
+        if (recipeUnit === 'ml' || recipeUnit === 'dl' || recipeUnit === 'l') {
+            // Folyékony - javasoljunk 500ml vagy 1l-t  
+            if (recipeQuantity < 500) {
+                return { quantity: 500, unit: 'ml' };
+            } else {
+                return { quantity: 1, unit: 'l' };
+            }
+        }
+
+        // Alapértelmezett: használjuk a recept mennyiségét
+        return { quantity: recipeQuantity, unit: recipeUnit };
     }
 
 
