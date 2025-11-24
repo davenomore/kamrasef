@@ -1479,6 +1479,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let isSavingLocally = false; // Flag to prevent re-render during local saves
+
     function setupRealtimeSync() {
         if (!currentUser) return;
 
@@ -1486,6 +1488,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Listen for real-time updates
         window.firebaseOnValue(userRef, (snapshot) => {
+            // Skip update if we're currently saving locally
+            if (isSavingLocally) {
+                return;
+            }
+
             if (snapshot.exists()) {
                 const data = snapshot.val();
                 pantryItems = data.pantryItems || [];
@@ -1507,6 +1514,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            // Set flag to prevent real-time listener from re-rendering
+            isSavingLocally = true;
+
             const userRef = window.firebaseRef(window.firebaseDatabase, `users/${currentUser.uid}`);
             await window.firebaseSet(userRef, {
                 pantryItems,
@@ -1518,6 +1528,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error saving data to Firebase:', error);
             alert('Hiba az adatok mentésekor: ' + error.message);
+        } finally {
+            // Reset flag after save completes (with small delay to ensure Firebase processes it)
+            setTimeout(() => {
+                isSavingLocally = false;
+            }, 100);
         }
     }
 
