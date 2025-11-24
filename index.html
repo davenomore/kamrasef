@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="hu">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kamra</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getDatabase, ref, set, get, onValue, remove } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBQZ3aQU34bDV8hV4LlZObr24oJ1aAWuQw",
+            authDomain: "kamrasef.firebaseapp.com",
+            projectId: "kamrasef",
+            storageBucket: "kamrasef.firebasestorage.app",
+            messagingSenderId: "74521844104",
+            appId: "1:74521844104:web:0f1b138491b2e99690c23d",
+            databaseURL: "https://kamrasef-default-rtdb.europe-west1.firebasedatabase.app"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const database = getDatabase(app);
+
+        // Make Firebase available globally for script.js
+        window.firebaseAuth = auth;
+        window.firebaseDatabase = database;
+        window.firebaseGoogleProvider = GoogleAuthProvider;
+        window.firebaseSignInWithPopup = signInWithPopup;
+        window.firebaseSignOut = signOut;
+        window.firebaseOnAuthStateChanged = onAuthStateChanged;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseGet = get;
+        window.firebaseOnValue = onValue;
+        window.firebaseRemove = remove;
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Kamra</h1>
+                <p>Rendszerezd stílusosan a hozzávalókat.</p>
+            </div>
+            <div id="auth-container" class="auth-container">
+                <button id="login-btn" class="btn-primary">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                        <polyline points="10 17 15 12 10 7"></polyline>
+                        <line x1="15" y1="12" x2="3" y2="12"></line>
+                    </svg>
+                    Bejelentkezés
+                </button>
+                <div id="user-info" class="user-info hidden">
+                    <img id="user-avatar" class="user-avatar" src="" alt="User">
+                    <span id="user-name"></span>
+                    <button id="logout-btn" class="btn-secondary">Kijelentkezés</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="top-row">
+            <!-- Mobile Navigation Buttons -->
+            <div class="mobile-nav-buttons">
+                <button id="nav-add-item" class="nav-btn active">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>Hozzáadás</span>
+                </button>
+                <button id="nav-recipe" class="nav-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path>
+                        <path d="M7 2v20"></path>
+                        <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>
+                    </svg>
+                    <span>Mit főzzünk?</span>
+                </button>
+                <button id="nav-inspiration" class="nav-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5">
+                        </path>
+                        <path d="M9 18h6"></path>
+                        <path d="M10 22h4"></path>
+                    </svg>
+                    <span>Inspiráció</span>
+                </button>
+            </div>
+            <section class="add-item-section">
+                <div class="input-group">
+                    <h2>Termék hozzáadása</h2>
+                </div>
+                <div class="input-group" style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="item-name" placeholder="Termék neve (pl. Spagetti)" autocomplete="off">
+                    <button id="scan-btn" class="btn-secondary" style="width: auto; min-width: 50px; padding: 0;"
+                        title="Vonalkód beolvasása">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 5v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2z">
+                            </path>
+                            <path d="M7 7h10"></path>
+                            <path d="M7 12h10"></path>
+                            <path d="M7 17h10"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-row">
+                    <div class="input-group">
+                        <input type="number" id="item-quantity" placeholder="Mennyiség" min="0" step="0.1">
+                    </div>
+                    <div class="input-group" style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="item-unit" placeholder="Egység (pl. kg, db)" list="units">
+                        <datalist id="units">
+                            <option value="db">
+                            </option>
+                            <option value="kg">
+                            </option>
+                            <option value="g">
+                            </option>
+                            <option value="l">
+                            </option>
+                            <option value="ml">
+                            </option>
+                            <option value="csomag">
+                            </option>
+                        </datalist>
+                        <button id="expiry-btn" class="btn-secondary" style="width: auto; min-width: 50px; padding: 0;"
+                            title="Lejárat hozzáadása">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="expiry-date-container" class="input-group hidden" style="margin-top: 0.5rem;">
+                    <input type="date" id="item-expiry" style="width: 100%;">
+                </div>
+
+                <div class="category-add-row">
+                    <div class="input-group">
+                        <input type="text" id="item-category" placeholder="Kategória (pl. Tészták)" list="categories">
+                        <datalist id="categories">
+                            <option value="Egyéb"></option>
+                            <option value="Fűszerek"></option>
+                            <option value="Gabonafélék"></option>
+                            <option value="Gyümölcsök"></option>
+                            <option value="Húsok"></option>
+                            <option value="Italok"></option>
+                            <option value="Konzervek"></option>
+                            <option value="Nasi"></option>
+                            <option value="Pékáru"></option>
+                            <option value="Sütés"></option>
+                            <option value="Tejtermékek"></option>
+                            <option value="Tészták"></option>
+                            <option value="Zöldségek"></option>
+                        </datalist>
+                    </div>
+                    <button id="add-btn" class="btn-primary">
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Hozzáadás
+                    </button>
+                </div>
+            </section>
+
+            <section class="recipe-section">
+                <div class="input-group">
+                    <h2>Mit főzzünk?</h2>
+                </div>
+                <div class="recipe-controls">
+                    <div class="select-wrapper">
+                        <select id="recipe-select">
+                            <option value="" disabled selected>Válassz receptet...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="recipe-actions">
+                    <button id="check-recipe-btn" class="btn-primary">
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Ellenőrzés
+                    </button>
+                    <button id="cook-recipe-btn" class="btn-primary btn-success">
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path>
+                            <path d="M7 2v20"></path>
+                            <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>
+                        </svg>
+                        Elkészítve
+                    </button>
+                    <button id="edit-recipe-btn" class="btn-secondary">
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                        </svg>
+                        Szerkesztés
+                    </button>
+                    <button id="new-recipe-btn" class="btn-secondary">
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        Új recept
+                    </button>
+                </div>
+
+            </section>
+
+            <!-- Inspiration Section -->
+            <section class="inspiration-section">
+                <div class="inspiration-controls">
+                    <h2>
+                        <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2"
+                            style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
+                            <path
+                                d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5">
+                            </path>
+                            <path d="M9 18h6"></path>
+                            <path d="M10 22h4"></path>
+                        </svg>
+                        Inspiráció
+                    </h2>
+                    <div>
+                        <button id="generate-inspiration-btn" class="btn-secondary" title="Véletlen recept">
+                            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M16 3h5v5"></path>
+                                <path d="M4 20L21 3"></path>
+                                <path d="M21 16v5h-5"></path>
+                                <path d="M15 15l6 6"></path>
+                                <path d="M4 4l5 5"></path>
+                            </svg>
+                        </button>
+                        <button id="ai-chef-btn" class="btn-primary"
+                            style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none;">
+                            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z">
+                                </path>
+                                <path d="M12 8v8"></path>
+                                <path d="M8 12h8"></path>
+                            </svg>
+                            AI séf
+                        </button>
+                    </div>
+                </div>
+                <div id="inspiration-result" class="inspiration-result">
+                    <div id="ai-result-content">
+                        <h3 id="inspiration-dish"></h3>
+                        <div id="inspiration-details">
+                            <div class="random-recipe-card">
+                                <div class="recipe-image-wrapper">
+                                    <img src="https://www.themealdb.com/images/media/meals/4xcfai1763765676.jpg"
+                                        alt="Bang bang garnélarák saláta" class="recipe-image">
+                                </div>
+                                <div class="recipe-info">
+                                    <h3>Bang bang garnélarák saláta</h3>
+                                    <p class="recipe-category"><strong>Kategória:</strong> Tenger gyümölcsei</p>
+                                    <a href="https://www.bbcgoodfood.com/recipes/bang-bang-prawn-salad" target="_blank"
+                                        class="recipe-link">
+                                        Recept <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                            <polyline points="15 3 21 3 21 9"></polyline>
+                                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- New Recipe Modal -->
+        <div id="recipe-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Új Recept</h2>
+                    <button id="close-modal-btn" class="btn-text">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group">
+                        <input type="text" id="new-recipe-name" placeholder="Recept neve (pl. Palacsinta)">
+                    </div>
+                    <div class="input-group">
+                        <select id="recipe-category">
+                            <option value="">Kategória választása...</option>
+                            <option value="Levesek">Levesek</option>
+                            <option value="Tésztás ételek">Tésztás ételek</option>
+                            <option value="Főzelékek">Főzelékek</option>
+                            <option value="Húsos ételek">Húsos ételek</option>
+                            <option value="Köretek">Köretek</option>
+                            <option value="Desszertek">Desszertek</option>
+                            <option value="Egyéb">Egyéb</option>
+                        </select>
+                    </div>
+                    <div id="recipe-ingredients-list">
+                        <!-- Ingredient inputs will be added here -->
+                    </div>
+                    <button id="add-ingredient-row-btn" class="btn-text">+ Hozzávaló</button>
+                </div>
+                <div class="modal-footer">
+                    <button id="save-recipe-btn" class="btn-primary">Mentés</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scanner Modal -->
+        <div id="scanner-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Vonalkód beolvasása</h2>
+                    <button id="close-scanner-btn" class="btn-text">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div id="reader" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Skeleton Loader -->
+            <div id="skeleton-loader" class="skeleton-loader">
+                <div class="skeleton-header"></div>
+                <div class="skeleton-item"></div>
+                <div class="skeleton-item"></div>
+                <div class="skeleton-item"></div>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="search-input" placeholder="Keresés a kamrában...">
+            </div>
+
+            <main id="pantry-list">
+                <!-- Categories and items will be rendered here -->
+                <div class="empty-state">
+                    <p>Még nincsenek termékek a kamrában.</p>
+                </div>
+            </main>
+
+            <div class="shopping-list-section">
+                <div class="shopping-header">
+                    <h2>Bevásárlólista</h2>
+                    <div class="shopping-controls">
+                        <button id="add-item-to-shopping-btn" class="btn-icon" title="Hozzáadás a bevásárlólistához">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                        <button id="add-checked-to-pantry-btn" class="btn-icon" title="Vásárolt termékek hozzáadása">
+                            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M9 11l3 3L22 4"></path>
+                                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+                            </svg>
+                        </button>
+                        <button id="clear-list-btn" class="btn-icon" title="Lista törlése">
+                            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2">
+                                </path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="shopping-list-items">
+                    <div class="empty-state-small">
+                        Nincs termék a listán
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
