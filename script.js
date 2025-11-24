@@ -624,11 +624,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (missingItems.length > 0) {
                 let message = `A következő hozzávalók hiányoznak vagy nincs belőlük elég a(z) ${recipe.name} recepthez:\n\n`;
 
-                // Show AI processing message
-                checkRecipeBtn.innerHTML = '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg> AI javaslatok...';
-
-                // Process missing items with AI suggestions (parallel for speed)
-                const suggestions = await Promise.all(missingItems.map(async (item) => {
+                // Process missing items and add to shopping list
+                for (const item of missingItems) {
                     message += `- ${item.name} (${item.quantity} ${item.unit})\n`;
 
                     // Get category
@@ -648,50 +645,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
-                    // Get AI shopping suggestion
-                    let suggestedQuantity = item.quantity;
-                    let suggestedUnit = item.unit;
-
-                    if (apiUrl) {
-                        try {
-                            console.log('Requesting AI suggestion for:', item.name, item.quantity, item.unit);
-                            const response = await fetch(apiUrl, {
-                                method: 'POST',
-                                redirect: 'follow',
-                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                                body: JSON.stringify({
-                                    action: 'suggestShoppingQuantity',
-                                    ingredientName: item.name,
-                                    recipeQuantity: item.quantity,
-                                    recipeUnit: item.unit
-                                })
-                            });
-
-                            const data = await response.json();
-                            console.log('AI response:', data);
-                            if (data.status === 'success') {
-                                suggestedQuantity = data.quantity;
-                                suggestedUnit = data.unit;
-                                console.log('Suggested:', suggestedQuantity, suggestedUnit);
-                            }
-                        } catch (e) {
-                            console.warn('AI suggestion failed for', item.name, e);
-                            // Use original values as fallback
-                        }
-                    }
-
-                    return {
+                    // Add to shopping list with original quantity
+                    addToShoppingList({
                         name: item.name,
-                        quantity: suggestedQuantity,
-                        unit: suggestedUnit,
+                        quantity: item.quantity,
+                        unit: item.unit,
                         category: category
-                    };
-                }));
+                    });
+                }
 
-                // Add all items to shopping list with AI suggestions
-                suggestions.forEach(item => addToShoppingList(item));
-
-                message += `\nEzeket hozzáadtam a bevásárlólistához (AI által javasolt vásárlási mennyiséggel).`;
+                message += `\nEzeket hozzáadtam a bevásárlólistához.`;
                 alert(message);
             } else {
                 alert(`Minden hozzávaló megvan a(z) ${recipe.name} recepthez! Jó főzést! 👨‍🍳`);
@@ -1005,117 +968,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return string.charAt(0).toUpperCase() + string.slice(1);
     }
 
-    // --- Cloud Sync Functions ---
 
-    // Settings UI removed as per user request. API URL is hardcoded.
+    // --- Helper Functions ---
 
-    async function loadData() {
-        // 1. Load from local cache immediately
-        const cachedPantry = localStorage.getItem('pantryItems');
-        const cachedShopping = localStorage.getItem('shoppingList');
-        const cachedRecipes = localStorage.getItem('recipes');
-
-        if (cachedPantry || cachedShopping || cachedRecipes) {
-            pantryItems = cachedPantry ? JSON.parse(cachedPantry) : [];
-            shoppingList = cachedShopping ? JSON.parse(cachedShopping) : [];
-            recipes = cachedRecipes ? JSON.parse(cachedRecipes) : [];
-            renderItems();
-            renderShoppingList();
-            renderRecipeSelect();
-            updateCategoryDatalist();
-        }
-
-        if (!apiUrl) {
-            // If no API URL, still render the UI with empty/cached data
-            renderItems();
-            renderShoppingList();
-            renderRecipeSelect();
-            updateCategoryDatalist();
-            return;
-        }
-
-        try {
-            // Show loading state (optional)
-            document.body.style.cursor = 'progress'; // Use progress cursor to indicate background work
-
-            // 2. Fetch fresh data from cloud
-            const response = await fetch(apiUrl, { redirect: 'follow' });
-            const data = await response.json();
-
-            // Assign temporary IDs if missing (backend doesn't store IDs yet)
-            pantryItems = (data.pantryItems || []).map(item => ({
-                ...item,
-                id: item.id || Date.now() + Math.random()
-            }));
-            shoppingList = (data.shoppingList || []).map(item => ({
-                ...item,
-                id: item.id || Date.now() + Math.random()
-            }));
-            recipes = data.recipes || [];
-
-            // Update cache
-            localStorage.setItem('pantryItems', JSON.stringify(pantryItems));
-            localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
-            localStorage.setItem('recipes', JSON.stringify(recipes));
-
-            renderItems();
-            renderShoppingList();
-            renderRecipeSelect();
-            updateCategoryDatalist();
-        } catch (error) {
-            console.error('Error loading data:', error);
-            // If cache was empty and fetch failed, alert user. Otherwise, silent fail (keep using cache).
-            if (!cachedPantry && !cachedShopping && !cachedRecipes) {
-                alert('Hiba történt az adatok betöltésekor. Ellenőrizd az internetkapcsolatot.');
-                // Still render the UI with empty data
-                renderItems();
-                renderShoppingList();
-                renderRecipeSelect();
-                updateCategoryDatalist();
-            }
-        } finally {
-            document.body.style.cursor = 'default';
-        }
-    }
-
-    const debouncedSave = debounce(async () => {
-        // Always update localStorage first (instant local backup)
-        localStorage.setItem('pantryItems', JSON.stringify(pantryItems));
-        localStorage.setItem('shoppingList', JSON.stringify(shoppingList));
-        localStorage.setItem('recipes', JSON.stringify(recipes));
-
-        if (!apiUrl) {
-            return;
-        }
-
-        if (isSyncing) return;
-        isSyncing = true;
-
-        try {
-            await fetch(apiUrl, {
-                method: 'POST',
-                redirect: 'follow',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8',
-                },
-                body: JSON.stringify({
-                    pantryItems,
-                    shoppingList,
-                    recipes
-                })
-            });
-            console.log('Data synced successfully');
-        } catch (error) {
-            console.error('Error syncing data:', error);
-            // Optionally alert user or retry
-        } finally {
-            isSyncing = false;
-        }
-    }, 1000); // 1 second debounce
-
-    function saveData() {
-        debouncedSave();
-    }
 
     function updateCategoryDatalist() {
         const datalist = document.getElementById('categories');
@@ -1268,79 +1123,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 500);
 
-    const debouncedAiCategorize = debounce(async (name) => {
-        if (!name || name.length < 3) return;
-
-        // Show loading state
-        const originalPlaceholder = itemCategoryInput.placeholder;
-        itemCategoryInput.placeholder = 'AI gondolkodik...';
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                    action: 'categorizeItem',
-                    itemName: name
-                })
-            });
-
-            const data = await response.json();
-            if (data.status === 'success' && data.category) {
-                // Only update if user hasn't manually selected something else in the meantime
-                if (itemCategoryInput.value === '' || itemCategoryInput.value === 'Egyéb') {
-                    itemCategoryInput.value = data.category;
-                }
-            }
-        } catch (e) {
-            console.error('AI Categorization failed', e);
-        } finally {
-            itemCategoryInput.placeholder = originalPlaceholder;
-        }
-    }, 1000);
-
+    // AI kategorizálás kikapcsolva (nincs backend)
     function suggestCategory() {
         const name = itemNameInput.value.toLowerCase().trim();
         if (name.length < 2) return;
 
-        // 1. Try local keywords first (fast)
+        // Használjuk csak a lokális kulcsszavakat
         let category = getCategoryFromKeywords(name);
 
         if (category) {
             itemCategoryInput.value = category;
-        } else {
-            // 2. Fallback to AI
-            debouncedAiCategorize(name);
         }
     }
-
-    // Debounced function for recipe category suggestion
-    const debouncedRecipeCategorize = debounce(async (name) => {
-        if (!name || name.length < 3) return;
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                    action: 'categorizeRecipe',
-                    recipeName: name
-                })
-            });
-
-            const data = await response.json();
-            if (data.status === 'success' && data.category) {
-                // Only update if user hasn't manually selected something else
-                if (recipeCategorySelect.value === '') {
-                    recipeCategorySelect.value = data.category;
-                }
-            }
-        } catch (e) {
-            console.error('AI Recipe Categorization failed', e);
-        }
-    }, 1000);
 
     // Local recipe category keywords (fast lookup)
     function getRecipeCategoryFromKeywords(name) {
@@ -1393,15 +1187,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = newRecipeNameInput.value.trim();
         if (!name || name.length < 3) return;
 
-        // 1. Try local keywords first (instant)
-        const localCategory = getRecipeCategoryFromKeywords(name);
-        if (localCategory) {
-            recipeCategorySelect.value = localCategory;
-        } else {
-            // 2. Fallback to AI if no local match
-            if (apiUrl) {
-                debouncedRecipeCategorize(name);
-            }
+        // Használjuk csak a lokális kulcsszavakat (nincs AI backend)
+        const category = getRecipeCategoryFromKeywords(name);
+        if (category) {
+            recipeCategorySelect.value = category;
         }
     }
 
@@ -1437,64 +1226,8 @@ document.addEventListener('DOMContentLoaded', () => {
         inspirationDish.textContent = 'Az AI séf gondolkodik... 🤖';
         inspirationDetails.innerHTML = '<div class="skeleton-loader"><div class="skeleton-item"></div><div class="skeleton-item"></div></div>';
 
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                redirect: 'follow',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8',
-                },
-                body: JSON.stringify({
-                    action: 'generateRecipe',
-                    items: pantryItems
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.status === 'success') {
-                if (data.recipe) {
-                    const recipe = data.recipe;
-                    inspirationDish.textContent = `🍽️ ${recipe.title}`;
-
-                    let html = '<div class="ai-recipe-content">';
-
-                    // Ingredients
-                    html += '<h4>Hozzávalók:</h4><ul>';
-                    recipe.ingredients.forEach(ing => {
-                        html += `<li>${ing}</li>`;
-                    });
-                    html += '</ul>';
-
-                    // Missing Ingredients (if any)
-                    if (recipe.missingIngredients && recipe.missingIngredients.length > 0) {
-                        html += '<h4>Hiányzó alapanyagok:</h4><ul class="missing-ingredients">';
-                        recipe.missingIngredients.forEach(ing => {
-                            html += `<li>⚠️ ${ing}</li>`;
-                        });
-                        html += '</ul>';
-                    }
-
-                    // Instructions
-                    html += '<h4>Elkészítés:</h4><ol>';
-                    recipe.instructions.forEach(step => {
-                        html += `<li>${step}</li>`;
-                    });
-                    html += '</ol></div>';
-
-                    inspirationDetails.innerHTML = html;
-                } else {
-                    throw new Error('A backend verziója régi. Kérlek, csinálj "New deployment"-et a Google Apps Script-ben!');
-                }
-            } else {
-                throw new Error(data.message || 'Ismeretlen hiba');
-            }
-
-        } catch (error) {
-            console.error('AI Error:', error);
-            inspirationDish.textContent = 'Hiba történt 😕';
-            inspirationDetails.innerHTML = `<p>Nem sikerült receptet generálni. Ellenőrizd az API kulcsot és az internetkapcsolatot.<br><small>${error.message}</small></p>`;
-        }
+        inspirationDish.textContent = 'Hiba történt 😕';
+        inspirationDetails.innerHTML = `<p>A receptgenerálás funkció jelenleg nem elérhető.</p>`;
     }
 
     async function generateInspiration(silent = false) {
@@ -1515,32 +1248,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let category = meal.strCategory;
                 const image = meal.strMealThumb;
 
-                // 2. Translate Name and Category using Backend AI (if API URL is set)
-                if (apiUrl) {
-                    try {
-                        const batchResponse = await fetch(apiUrl, {
-                            method: 'POST',
-                            redirect: 'follow',
-                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                            body: JSON.stringify({
-                                action: 'translateBatch',
-                                texts: { name: name, category: category },
-                                targetLang: 'hu'
-                            })
-                        });
-                        const batchData = await batchResponse.json();
-
-                        if (batchData.status === 'success' && batchData.translations) {
-                            name = batchData.translations.name || name;
-                            category = batchData.translations.category || category;
-                        }
-
-                    } catch (e) {
-                        console.warn('Translation failed, using English:', e);
-                        // Fallback to local dictionary if available
-                        name = mealTranslations[name] || name;
-                    }
-                }
+                // 2. Translate Name and Category using local dictionary
+                name = mealTranslations[name] || name; // Fallback to local dictionary if available
 
                 // Display result
                 inspirationDish.textContent = '';
